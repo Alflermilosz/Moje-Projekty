@@ -1,0 +1,1046 @@
+---
+title: "Projekt"
+author: "Miłosz Alfler"
+date: "27 10 2022"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+library(kableExtra)
+library(car)
+library(ggpubr)
+library(rstatix)
+library(datarium)
+library(broom)
+library(lmtest)
+library(olsrr)
+
+##dane<-read.csv("C:\\Users\\milos\\OneDrive\\Pulpit\\Semestr 5\\Projekt z analizy danych\\Projekt\\archive\\Pokemon.csv")
+dane<-read.csv("Pokemon.csv")
+
+str(dane)
+dane$Legendary<-as.factor(dane$Legendary)
+dane$Type.1<-as.factor(dane$Type.1)
+dane$Type.2<-as.factor(dane$Type.2)
+dane$Generation<-as.factor(dane$Generation)
+
+
+```
+
+# Analiza zbioru "Pokemon with stats"
+
+Dane zostały pobrane ze strony Kaggle [(link)](https://www.kaggle.com/datasets/abcsds/pokemon "Pokemon with stats").
+
+Zbiór ten zawiera 800 pokemonów wraz z ich numerami, nazwami, pierwszymi i drugimi typami, informacją czy dany pokemon jest legendą i z której generacji pochodzi czy też podstawowymi statystykami takimi jak Total, HP, Attack, Defence, Special Attack, Special Defence i Speed.
+
+* X: Numer ID dla każdego pokemona.
+
+* Name: Nazwa.
+
+* Type 1: Każdy pokemon ma swój typ (żywioł) który determinuje jego odporności i słabości.
+
+* Type 2: Niektóre z nich mają 2 typy.
+
+* Total: Suma wszystkich niżej wymienionych statystyk, główny sposób oceny mocy pokemona.
+
+* HP: Punkty życia, definiują jak dużo obrażeń może przyjąć pokemon zanim zemdleje.
+
+* Attack: Podstawowy mnożnik normalnego ataku.
+
+* Defense: Podstawowa obrona przeciwko normalnym atakom.
+
+* SP Atk: Specjalny atak, podstawowy mnoznik dla specjalnych ataków.
+
+* SP Def: Speckalna obrona, definiuje obrone przeciwko specjalnym atakom.
+
+* Speed: Determinuje który pokemon atakuje jako pierwszy w każdej rundzie.
+
+* Generation: Informuje z której edycji pochodzi pokemon.
+
+* Legendary: Informuje czy dany pokemon jest legendą.
+
+# Prezentacja zbioru 
+
+```{r echo=FALSE}
+kable(dane) %>% 
+  kable_styling() %>% 
+   scroll_box( height = "500px")
+```
+
+Dane są kompletne jedyne braki występują w zmiennej Type 2, ale nie używam tej zmiennej w żadnej analizie .
+
+## Typy pokemonów
+
+```{r ,fig.width=12}
+licz_typy<-dane %>% 
+  group_by(Type.1) %>% 
+  count()
+
+
+kable(licz_typy) %>% 
+  kable_styling() %>% 
+  scroll_box( height = "350px")
+```
+
+W zbiorze znajduje się 18 typów pokemonów. Najwięcej jest pokemonów typu wodnego, a najmniej latającego.
+
+```{r}
+library(RColorBrewer)
+n <- 18
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+procenty<-licz_typy %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc))
+
+
+ggplot(procenty,aes(x="",y=perc,fill=Type.1))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  fill_palette(palette = col_vector)
+```
+
+## Statystyki opisowe
+
+```{r echo=FALSE,fig.width=12}
+#statystyki opisowe całości
+st<-dane %>% 
+  select(!c(1,2,3,4,12,13)) 
+st_op<-apply(st,2,summary)
+st_op<-rbind(st_op,Sd=apply(st,2,sd))
+as.data.frame(round(st_op,2)) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Średnia z podziałem na typ pokemona
+
+```{r fig.width=12}
+#średnia type1
+dane %>% 
+  group_by(Type.1) %>% 
+  mutate_if(is.numeric,mean) %>% 
+  dplyr::select(!c(1,2,4,12,13)) %>% 
+  unique(dane$Type.1,incomparables = F) %>% 
+  arrange(desc(Total)) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box( height = "350px")
+```
+
+Jak widać pod względem zmiennej Total najlepiej wypadają pokemony typu smoczego a najgorzej owady.
+
+## Wykres boxplot zmiennej Total w podziale na typ pokemona
+
+```{r fig.width=12}
+boxplot(Total~Type.1,data = dane,
+        xlab="Typ pokemona",
+        ylab = "Total",
+        col=c("#3D74EBC7"),
+        border="black")
+```
+
+## Średnia z podziałem na generacje pokemona
+
+```{r fig.width=12}
+#średnia generation
+dane %>% 
+  group_by(Generation) %>% 
+  mutate_if(is.numeric,mean) %>% 
+  dplyr::select(12,!c(1,2,3,4,13)) %>% 
+  unique(dane$Generation,incomparables = F) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres boxplot zmiennej Total w podziale na generacje
+
+```{r fig.width=12}
+boxplot(Total~Generation,data = dane,
+        xlab="Generacja",
+        ylab = "Total",
+        col=c("#3D74EBC7"),
+        border="black")
+```
+
+## Średnia z podziałem na to czy pokemon jest legendarny
+
+```{r fig.width=12}
+#średnia legendary
+dane %>% 
+  group_by(Legendary) %>% 
+  mutate_if(is.numeric,mean) %>% 
+  select(13,!c(1,2,3,4,12)) %>% 
+  unique(dane$Legendary,incomparables = F) %>% 
+  kable(caption = "Średnia z podziałem na legendy") %>% 
+  kable_styling()
+```
+
+## Wykres boxplot zmiennej Total w podziale na to czy pokemon jest legendarny
+
+```{r fig.width=12}
+boxplot(Total~Legendary,data = dane,
+        xlab="Legendarny",
+        ylab = "Total",
+        col=c("#3D74EBC7"),
+        border="black")
+```
+
+## Wykres przedstawiający liczebność każdego typu pokemona z podziałem na to czy jest legendą
+
+```{r fig.width=12}
+#wykres dla type1 z podziałem na legendary
+dane %>% 
+  add_count(Type.1) %>% 
+  mutate("n"=1) %>% 
+  ggplot(aes(x=Type.1,y=n,fill=Legendary))+
+  geom_bar(stat = "identity")+
+  ylab("Liczba")+
+  xlab("Typ")
+```
+
+## Wykres przedstawiący liczbność każdego typu pokemona z podziałem na ich generacje
+
+```{r fig.width=12}
+#wykres dla type1 z podziałem na generation
+dane %>% 
+  add_count(Type.1) %>% 
+  mutate("n"=1) %>% 
+  ggplot(aes(x=Type.1,y=n,fill=Generation))+
+  geom_bar(stat = "identity")+
+  ylab("Liczba")+
+  xlab("Typ")
+
+```
+
+# Macierz korelacji zmiennych
+
+```{r fig.width=12}
+dane_liczbowe<-dane %>% 
+  select(Total,HP,Attack,Defense,Sp..Atk,Sp..Def,Speed)
+ggcorrplot::ggcorrplot(cor(dane_liczbowe),lab=T)
+```
+
+Z macierzy wynika, że największy wpływ na zmienną Speed ma zmienna Sp.Atk (zmiennej Total nie bierzemy pod uwagę ponieważ to Total zależy od Speed).
+
+# Modele linniowe
+
+W tym miejscu celem jest znalezienie zależności linniowej, która najlepiej opisuje zmienną Speed.
+
+## Budowa modelu
+
+Model budowałem po przez dodawanie do modelu pustego kolejnych zmiennych zaczynając od tych które mają największą korelacje ze zmienną Speed.
+
+### Model pusty
+
+```{r echo=FALSE, fig.width=12}
+
+#Model linniowy szukający największych wpływów na zmienną Speed
+modl<-lm(Speed~1,data = dane_liczbowe)
+summary(modl)
+
+```
+
+### Model ze zmienną Sp.Atk
+
+```{r}
+
+modl1<-lm(Speed~Sp..Atk,data = dane_liczbowe)
+summary(modl1)
+#Sp..Atk istotny statystycznie ale słabe dopasowanie modelu 22%
+
+dane %>% 
+  ggplot(aes(x=Sp..Atk,y=Speed))+
+  geom_point(col="#A254DED3")+
+  geom_smooth(method = lm)
+
+anova(modl,modl1)
+#pvalue bardzo małe to znaczy że model ze zmienną Sp..Atk jest lepszy
+
+```
+
+### Model ze zmiennymi Sp.Atk i Attack
+
+```{r}
+modl2<-lm(Speed~Sp..Atk+Attack,dane_liczbowe)
+summary(modl2)
+#Obie zmienne istotne statystycznie i lepsze dopasowanie 27%
+
+dt.long <- dane %>%
+  pivot_longer(cols = c(Sp..Atk,Attack),
+               names_to = "Zmienna",
+               values_to = "Wartość")
+
+dt.long %>% 
+  ggplot(aes(x=Wartość,y=Speed))+
+  geom_point(col="#A254DED3")+
+  geom_smooth(method = lm)+
+  xlab("Zmienne")
+
+anova(modl1,modl2)
+#Małe pvalue co oznacza, że modl2 jest lepszy110	130
+```
+
+### Model ze zmiennymi Sp.Atk, Attack i Sp.Def
+
+```{r}
+modl3<-lm(Speed~Sp..Atk+Attack+Sp..Def,dane_liczbowe)
+summary(modl3)
+#Zmienna Sp..Def nie jest istotna statystycznie dopasowanie znowy ok 27%
+
+dt.long2 <- dane %>%
+  pivot_longer(cols = c(Sp..Atk,Attack,Sp..Def),
+               names_to = "Zmienna",
+               values_to = "Wartość")
+
+dt.long %>% 
+  ggplot(aes(x=Wartość,y=Speed))+
+  geom_point(col="#A254DED3")+
+  geom_smooth(method = lm)+
+  xlab("Zmienne")
+
+anova(modl2,modl3)
+#p value duze a więc modl2 lepszy
+```
+
+### Model ze zmiennymi Sp.Atk, Attack, Sp.Def i HP
+```{r}
+modl5<-lm(Speed~Sp..Atk+Attack+Sp..Def+HP,dane_liczbowe)
+summary(modl5)
+# dopasowanie ok27% zmienna Sp..Def nie istotna
+
+dt.long3 <- dane %>%
+  pivot_longer(cols = c(Sp..Atk,Attack,Sp..Def,HP),
+               names_to = "Zmienna",
+               values_to = "Wartość")
+
+dt.long3 %>% 
+  ggplot(aes(x=Wartość,y=Speed))+
+  geom_point(col="#A254DED3")+
+  geom_smooth(method = lm)+
+  xlab("Zmienne")
+
+anova(modl2,modl5)
+```
+
+### Model pełny
+
+```{r}
+modl4<-lm(Speed~.-Total,dane_liczbowe)
+summary(modl4)
+#Wszystkie zmienne są istotnie statystycznie i dopasowanie wynosi ok 32%
+
+dt.long4 <- dane_liczbowe %>%
+  pivot_longer(cols = !c(Total,Speed),
+               names_to = "Zmienna",
+               values_to = "Wartość")
+
+dt.long4 %>% 
+  ggplot(aes(x=Wartość,y=Speed))+
+  geom_point(col="#A254DED3")+
+  geom_smooth(method = lm)+
+  xlab("Zmienne")
+
+anova(modl2,modl4)
+#p value małe modl4 lepszy
+
+
+
+```
+
+### Podsumowanie
+
+```{r include=FALSE}
+pp<-predict(modl)
+p1<-predict(modl1)
+p2<-predict(modl2)
+p3<-predict(modl3)
+p4<-predict(modl4)
+p5<-predict(modl5)
+
+RMSEp<-signif(sqrt(mean((dane_liczbowe$Speed-pp)^2)),10)
+RMSE1<-signif(sqrt(mean((dane_liczbowe$Speed-p1)^2)),10)
+RMSE2<-signif(sqrt(mean((dane_liczbowe$Speed-p2)^2)),10)
+RMSE3<-signif(sqrt(mean((dane_liczbowe$Speed-p3)^2)),10)
+RMSE4<-signif(sqrt(mean((dane_liczbowe$Speed-p4)^2)),10)
+RMSE5<-signif(sqrt(mean((dane_liczbowe$Speed-p5)^2)),10)
+
+MAEp<-signif(mean(abs(dane_liczbowe$Speed-pp)),10)
+MAE1<-signif(mean(abs(dane_liczbowe$Speed-p1)),10)
+MAE2<-signif(mean(abs(dane_liczbowe$Speed-p2)),10)
+MAE3<-signif(mean(abs(dane_liczbowe$Speed-p3)),10)
+MAE4<-signif(mean(abs(dane_liczbowe$Speed-p4)),10)
+MAE5<-signif(mean(abs(dane_liczbowe$Speed-p5)),10)
+
+ip<-residuals(modl)/(1-lm.influence(modl)$hat)
+i1<-residuals(modl)/(1-lm.influence(modl1)$hat)
+i2<-residuals(modl)/(1-lm.influence(modl2)$hat)
+i3<-residuals(modl)/(1-lm.influence(modl3)$hat)
+i4<-residuals(modl)/(1-lm.influence(modl4)$hat)
+i5<-residuals(modl)/(1-lm.influence(modl5)$hat)
+
+PRESSp<-signif(round(sum(ip^2),3),10)
+PRESS1<-signif(round(sum(i1^2),3),10)
+PRESS2<-signif(round(sum(i2^2),3),10)
+PRESS3<-signif(round(sum(i3^2),3),10)
+PRESS4<-signif(round(sum(i4^2),3),10)
+PRESS5<-signif(round(sum(i5^2),3),10)
+
+AICp<-signif(AIC(modl),10)
+AIC1<-signif(AIC(modl1),10)
+AIC2<-signif(AIC(modl2),10)
+AIC3<-signif(AIC(modl3),10)
+AIC4<-signif(AIC(modl4),10)
+AIC5<-signif(AIC(modl5),10)
+```
+
+```{r}
+
+miary<-data.frame(
+  c(summary(modl)$r.squared,RMSEp,MAEp,PRESSp,AICp),
+  c(summary(modl1)$r.squared,RMSE1,MAE1,PRESS1,AIC1),
+  c(summary(modl2)$r.squared,RMSE2,MAE2,PRESS2,AIC2),
+  c(summary(modl3)$r.squared,RMSE3,MAE3,PRESS3,AIC3),
+  c(summary(modl4)$r.squared,RMSE4,MAE4,PRESS4,AIC4),
+  c(summary(modl5)$r.squared,RMSE5,MAE5,PRESS5,AIC5)
+)
+miary<-round(miary,2)
+miary<-cbind(c('R squared','RMSE','MAE','PRESS','AIC'),miary)
+colnames(miary)<-c('miara','model pusty','model 1','model 2','model 3','model pełny','model 5')
+kable(miary) %>% 
+  kable_styling()
+```
+
+Wszystkie miary dopasowania wskazują, że model 4(pełny) jest najlepszy.
+
+```{r fig.width=12, include=FALSE}
+to_plot<-rbind(dane_liczbowe$HP,dane_liczbowe$Attack,dane_liczbowe$Defense,dane_liczbowe$Sp..Atk,dane_liczbowe$Sp..Def)
+
+to_plotSpeed<-rbind(dane_liczbowe$Speed,dane_liczbowe$Speed,dane_liczbowe$Speed,dane_liczbowe$Speed,dane_liczbowe$Speed)
+
+par(mfrow=c(2,3))
+
+plot(dane_liczbowe$HP,dane_liczbowe$Speed,main = "Wykres zależności Speed od HP",xlab = "HP",ylab = "Speed")
+
+plot(dane_liczbowe$Attack,dane_liczbowe$Speed,main = "Wykres zależności Speed od Attack",xlab = "Attack",ylab = "Speed")
+
+plot(dane_liczbowe$Defense,dane_liczbowe$Speed,main = "Wykres zależności Speed od Defense",xlab = "Defense",ylab = "Speed")
+
+plot(dane_liczbowe$Sp..Atk,dane_liczbowe$Speed,main = "Wykres zależności Speed od Sp..Atk",xlab = "Sp..Atk",ylab = "Speed")
+
+plot(dane_liczbowe$Sp..Def,dane_liczbowe$Speed,main = "Wykres zależności Speed od Sp..Def",xlab = "Sp..Def",ylab = "Speed")
+
+plot(to_plot,to_plotSpeed,main = "Wykres zależności Speed od Wyszystkich zmiennych",xlab = "Zmienne",ylab = "Speed")
+```
+
+## Wykresy pomocnicze
+
+```{r}
+par(mfrow=c(2,2))
+plot(modl4)
+```
+
+Niestety ale nawet używając przekształceń Boxa Coxa i usuwaniu elementów odstających jeden z testów odrzucał hipoteze mówiącą o linniowej zależności. Jako iż nie da się tego wymusić w żaden sposób medel pełny po przekształceniu Boxa Coxa zmiennej objaśnianej jest najlepszym możliwym modelem.
+
+Ostateczną zależność można przedstawić jako:
+
+$$ Speed^{0.66}=14.515-0.025*HP+0.08*Attack-0.067*Defense+0.071*Sp.Atk+0.044*Sp.Def $$
+
+```{r eval=FALSE, include=FALSE}
+vif(modl4)
+
+shapiro.test(modl4$residuals)
+plot(modl4,2)
+
+```
+
+```{r eval=FALSE, include=FALSE}
+
+
+summary(transy1 <- powerTransform(modl4))
+bkdane<-dane_liczbowe[-432,]
+bkdane$Speed<-bcPower(bkdane$Speed,lambda = 0.66)
+
+modlbc1<-lm(Speed~.-Total,data = bkdane)
+summary(modlbc1)
+
+plot(modlbc1)
+
+shapiro.test(modlbc1$residuals)
+bptest(modlbc1)
+gqtest(modlbc1,order.by = ~fitted(modlbc1))
+hmctest(modlbc1,order.by = ~fitted(modlbc1))
+dwtest(modlbc1,order.by = ~fitted(modlbc1))
+bgtest(modlbc1,order.by = ~fitted(modlbc1))
+raintest(modlbc1,order.by = ~fitted(modlbc1))
+resettest(modlbc1)
+harvtest(modlbc1,order.by = ~fitted(modlbc1))
+
+```
+
+# Testy ANOVA
+
+## Total dla typów pokemonów 
+
+Celem jest zbadanie czy przeciętny wynik zmiennej Total jest taki sam dla wszystkich typów pokemonów, jeżeli nie jest to znaleźć typ "najlepszy".
+
+## Wizualizacja
+
+```{r, fig.width=12}
+library(agricolae)
+library(ggstatsplot)
+dane %>% 
+  ggline(x="Type.1",y="Total",
+         add=c("mean_ci","jitter"))
+
+```
+
+```{r include=FALSE}
+## Sprawdzanie założeń 
+
+library(rstatix)
+dane %>% 
+  group_by(Type.1) %>% 
+  shapiro_test(Total)
+#Niespełnione założenie
+leveneTest(Total~Type.1, data = dane)
+#Spełnione założenie 
+
+#Mimo że nie są spełnione założenia to na podstawie dzeł Lindmana i Boxa mówiących o nie spełnienu założenie w anovie w przypadku dużych liczebności i zastosuje test anova.
+```
+
+Jeżeli chodzi o założenia spełnione jest tylko to mówiące o homoskedastyczności mimo to na podstawie dzieł Lindmana i Boxa mówiących o teście F i konsekwencjach nie spełniania założnie zdecydowałem się użyć zwykłego testu anova
+
+## Model
+
+```{r}
+# Test
+
+anova_tT <- aov(Total~Type.1, data = dane)
+summary(anova_tT)
+
+#Jak widać dla przeciętny wynik zmiennej Total nie jest jednakowy dla conajmniej 2 typów pokemonów
+```
+
+P-value jest małe, a więc śmiało można powiedzieć, że dla co najmniej dwóch typów pokemonów przeciętny poziom Total nie jest jednakowy.
+
+## Testy post-hoc
+
+```{r}
+
+#Testy post-Hoc
+
+pairwise.t.test(dane$Total,dane$Type.1)
+#test LSD
+#jak widzimy w teście to smoki najczęściej odstają pod względem średnich, a po przyjżeniu danym możemy śmiało powiedzieć, że grupa ta jest "najlepsza" pod względem sumy statystyk.
+
+# zrobić anova generacja~Total Type~Atak, Type~Defence, Type~Speed
+```
+
+jak widać w teście to smoki najczęściej odstają w stosunku do pozostałych typów, a po przyjżeniu się danym można śmiało powiedzieć, że typ ten jest "najlepsza" pod względem sumy statystyk.
+
+## Total na przestrzeni czasu
+
+Celem jest zbadanie czy przeciętny wynik zmiennej Total zmieniał się z kolejnymi częściami.
+
+## Wizualizacja
+
+```{r}
+# Anova Generacja~Total
+
+dane %>% 
+  ggline(x="Generation",y="Total",
+         add=c("mean_ci","jitter"))
+
+dane %>% 
+  ggbetweenstats(x = Generation,
+                 y = Total, bf.message = F)
+```
+
+
+```{r include=FALSE}
+dane %>% 
+  group_by(Generation) %>% 
+  shapiro_test(Total)
+# brak normalności
+leveneTest(Total~Generation, data = dane)
+#spełnione
+#Mimo że nie są spełnione założenia to na podstawie dzeł Lindmana i Boxa mówiących o nie spełnienu założenie w anovie w przypadku dużych liczebności i zastosuje test anova.
+```
+
+W tym przypadku także jest spełnione tylko założenie  mówiące o homoskedastyczności, a więc znowu powołując się na dzieła Lindmana zastosowałem zwykły test anova.
+
+## Model
+
+```{r}
+anova_GT <- aov(Total~Generation, data = dane)
+summary(anova_GT)
+#pvalue >0.05 a więc można wyciągnąć wnioski, że na przestrzeni czasu i nowych dodatków poziom mocy pokemonów nie zmieniał sie
+```
+
+Jak widać p-value jest większe od 0.05, więc można wyciągnąć wnioski, że zmienna Total utrzymywała stały poziom na przestrzeni kolejnych części.
+
+## Attack na przestrzeni czasu
+
+Celem jest zbadanie czy przeciętny wynik zmiennej Attack zmieniał się z kolejnymi częściami.
+
+## Wizualizacja
+
+```{r}
+# Anova Generacja~Atak
+dane %>% 
+  ggline(x="Generation",y="Attack",
+         add=c("mean_ci","jitter"))
+
+dane %>% 
+  ggbetweenstats(x = Generation,
+                 y = Attack, bf.message = F)
+```
+
+
+
+```{r include=FALSE}
+dane %>% 
+  group_by(Generation) %>% 
+  shapiro_test(Attack)
+# brak normalności
+leveneTest(Attack~Generation, data = dane)
+#spełnione
+#Mimo że nie są spełnione założenia to na podstawie dzeł Lindmana i Boxa mówiących o nie spełnienu założenie w anovie w przypadku dużych liczebności i zastosuje test anova.
+```
+
+Kwestia założeń jest taka sama jak poprzednio, więc znów stosuję klasyczną anove.
+
+## Model
+
+```{r}
+anova_AT <- aov(Attack~Generation, data = dane)
+summary(anova_AT)
+#pvalue >0.05 nieznacznie a więc na poziomie istotności 0.95 można powiedzieć, że na przestrzeni czasu zmienna attack nie zmieniała się znacznie 
+
+```
+
+W tym przypadku wynik nie jest już taki oczywisty, ale zmuszony jestem przyjąć, iż zmienna Attack zachowywała stały poziom na przestrzni kolejnych części.
+
+## Defense na przestrzeni czasu
+
+Celem jest zbadanie czy przeciętny wynik zmiennej Defense zmieniał się z kolejnymi częściami.
+
+## Wizualizacja
+
+```{r}
+# Anova Generacja~Defense
+dane %>% 
+  ggline(x="Generation",y="Defense",
+         add=c("mean_ci","jitter"))
+
+dane %>% 
+  ggbetweenstats(x = Generation,
+                 y = Defense, bf.message = F)
+```
+
+```{r include=FALSE}
+dane %>% 
+  group_by(Generation) %>% 
+  shapiro_test(Defense)
+# brak normalności
+leveneTest(Defense~Generation, data = dane)
+#nie spełnione
+```
+
+Znów te same wnioski jeżeli chodzi o założenia.
+
+## Model
+
+```{r}
+anova_AD <- aov(Defense~Generation, data = dane)
+summary(anova_AD)
+```
+
+Tutaj widać, że Defense nie zmieniał się znacząco na przestrzeni lat.
+
+## Speed na przestrzeni czasu
+
+Celem jest zbadanie czy przeciętny wynik zmiennej Speed zmieniał się z kolejnymi częściami.
+
+## Wizualizacja
+
+```{r}
+# Anova Generacja~Speed
+dane %>% 
+  ggline(x="Generation",y="Speed",
+         add=c("mean_ci","jitter"))
+
+dane %>% 
+  ggbetweenstats(x = Generation,
+                 y = Speed, bf.message = F)
+```
+```{r include=FALSE}
+dane %>% 
+  group_by(Generation) %>% 
+  shapiro_test(Speed)
+# brak normalności
+leveneTest(Speed~Generation, data = dane)
+#spełnione
+```
+
+Znów te same wnioski jeżeli chodzi o założenia.
+
+## Model
+
+```{r}
+anova_AS <- aov(Speed~Generation, data = dane)
+summary(anova_AS)
+```
+
+Widzimy że nie jest to jednoznaczne, ale trzeba powiedzieć, że zmienna Speed zachowywała stały poziom na przestrzeni lat.
+
+# Model dyskryminujący ze wzgledu na zmienną Legendary
+
+Celem jest zbudowanie moedlu LDA umiejącego poznacz czy pokemon jest legendą czy też nie.
+
+Dane podzieliłem w stosunku 2 do 1 kolejno w zbiorze uczącym i testowym.
+
+```{r}
+library(MASS)
+dane.std <-dane %>% 
+  mutate_if(is.numeric,scale) %>% 
+  as.data.frame()
+
+set.seed(2022)
+
+dane_ucz<-sample_n(dane.std,size=nrow(dane)*(2/3)) %>% 
+  as.data.frame()
+dane_test<-setdiff(dane.std,dane_ucz) %>% 
+  as.data.frame()
+
+
+a<-dane_ucz%>% 
+ count(Legendary) 
+b<-dane_test %>% 
+  count(Legendary)
+kable(data.frame("Ucz"=a,"Test"=b))
+```
+
+## Model
+
+```{r}
+mod.lda<-lda(Legendary~Total+HP+Attack+Defense+Sp..Atk+Sp..Def+Speed,dane_ucz)
+mod.lda
+# Jedna zmienna dyskryminująca a największy wpływ ma zmienna Sp.Atk
+```
+
+Jako iż wyniki mogłybyć tylko 2(jest legendą lub nie jest) dostaliśmy tylko jedną zmienną ld.
+
+Jak widać największy wpływ na definiowanie czy pokemno jest legendą ma Sp.Atk, a następnie Total.
+
+## Testowanie modelu
+
+```{r}
+pred.ucz<-predict(mod.lda,newdata = dane_ucz)
+tab<-table(obs=dane_ucz$Legendary,pred=pred.ucz$class)
+tab
+sum(diag(tab))/sum(tab)
+
+pred<-predict(mod.lda,newdata = dane_test)
+tab2<-table(obs=dane_test$Legendary,pred=pred$class)
+tab2
+sum(diag(tab2))/sum(tab2)
+# 94% skuteczności
+
+```
+
+Testując dane w zbiorze uczącym i testowym w obu przypadkach dokładność wynosiła powyżej 90%, a więc model jest dobry.
+
+# Model dyskryminujący ze względu na zmienną Type.1
+
+Celem jest zbudowanie modelu lda umiejącego poznać jakiego typu powinien być pokemon.
+
+Dane zostały podzielone w ten sam sposób.
+
+```{r}
+c<-dane_ucz%>% 
+ count(Type.1) 
+d<-dane_test %>% 
+  count(Type.1)
+kable(data.frame("Type"=c$Type.1,"Ucz"=c$n,"Test"=d$n))
+```
+
+## Model
+
+```{r}
+mod.lda2<-lda(Type.1~Total+HP+Attack+Defense+Sp..Atk+Sp..Def+Speed,dane_ucz)
+mod.lda2
+```
+
+W tym modelu powstało aż 6 zmiennych ld. Najmocniej definiuj zmienna ld1 a największy wpływn na nią ma Defense.
+
+## Testowanie modelu
+
+```{r}
+pred.ucz2<-predict(mod.lda2,newdata = dane_ucz)
+tab2_2<-table(obs=dane_ucz$Type.1,pred=pred.ucz2$class)
+tab2_2
+sum(diag(tab))/sum(tab)
+
+pred2<-predict(mod.lda2,newdata = dane_test)
+tab2_1<-table(obs=dane_test$Type.1,pred=pred2$class)
+tab2_1
+sum(diag(tab2_1))/sum(tab2_1)
+# Tylko 20% skuteczności słaby model
+
+```
+
+W tym przypadku testowanie modelu na zbiorze uczącym wypadło znacznie lepiej niż testowym. Model dla nowych danych dobrze przewidział tylko co 5 typ.
+
+# Szukanie najlepszych pokemonów ze względu na statystyki ofensywne i defensywne
+
+W tym miejscu stworzyłem nową zmienną sumującą statystki ofensywne takie jak Attack, Sp.Atk, Speed i osobno statystki defensywne czyli HP, Defense, Sp.Def. Następnie w zależności czy suma statystyk ofensywnych była większa od defensywnych zmienne były dzielone na ATK i DEF.
+
+Dane do modelu zostały podzielone w taki sam sposób.
+
+```{r}
+df<-dane %>% 
+  mutate(Spec=as.factor(ifelse(Attack+Sp..Atk+Speed>Defense+Sp..Def+HP,yes = "ATK",no="DEF")))
+
+df.std <-df %>% 
+  mutate_if(is.numeric,scale) %>% 
+  as.data.frame()
+
+set.seed(2022)
+
+df_ucz<-sample_n(df.std,size=nrow(df)*(2/3)) %>% 
+  as.data.frame()
+df_test<-setdiff(df.std,df_ucz) %>% 
+  as.data.frame()
+
+e<-df_ucz%>% 
+ count(Spec) 
+f<-df_test %>% 
+  count(Spec)
+kable(data.frame("Spec"=e$Spec,"Ucz.n"=e$n,"Test.n"=f$n))
+```
+
+## Model
+
+```{r}
+mod.lda3<-lda(Spec~Total+HP+Attack+Defense+Sp..Atk+Sp..Def+Speed,df_ucz)
+mod.lda3
+```
+
+W tym przypadku powstała znowu tylko 1 zmienna ld, a największy wpływ na nia ma Speed i Defense.
+
+## Testowanie modelu
+
+```{r}
+pred.ucz3<-predict(mod.lda3,newdata = df_ucz)
+tab3_2<-table(obs=df_ucz$Spec,pred=pred.ucz3$class)
+tab3_2
+sum(diag(tab))/sum(tab)
+
+pred3<-predict(mod.lda3,newdata = df_test)
+tab3<-table(obs=df_test$Spec,pred=pred3$class)
+tab3
+sum(diag(tab3))/sum(tab3)
+# 90% skuteczności
+```
+
+Tutaj także w obu przypadkach dokładność byłą powżyej 90%, więc model jest dobry.
+
+# Analiza skupień
+
+Jako iż danych jest dużo i wyniki byłyby nie czytelne postanowiłem wylosować 3 zestawy po 50 elementów i wykonać dla nich analizy skupień
+
+```{r}
+set.seed(2023)
+samp<-sample.int(800,size = 50)
+dane_as<-dane[c(samp),c(2,6,7,8,9,10,11)]
+row.names(dane_as)<-dane_as$Name
+dane_as<-dane_as[,-1]
+dane_as_std <- dane_as %>% scale %>% as.data.frame()
+library(factoextra)
+```
+
+## Heatmap
+
+```{r}
+d1 <- get_dist(dane_as, stand = F)
+fviz_dist(d1)
+```
+
+Z heatmapy widoczne są conajmniej dwa skupienia.
+
+##  Liczba skupień
+
+```{r}
+fviz_nbclust(dane_as_std, hcut, method = "wss", k.max = 15) # metoda hierarchiczna
+fviz_nbclust(dane_as_std, kmeans, method = "silhouette")
+```
+
+W tej sytuacji optymalne wydają się dwa skupienia.
+
+## Modele
+
+Model zbudowany przy użyciu łączenia metodą pojedynczego wiązania:
+
+```{r}
+mod.hc.complete <- hclust(d1, method = "complete" )
+plot(mod.hc.complete, cex = 0.6)
+```
+
+Model zbudowany przy użyciu łączenia metodą Warda:
+
+```{r}
+mod.hc.ward <- hclust(d1, method = "ward.D2" )
+plot(mod.hc.ward, cex = 0.6)
+```
+
+W pierwszym modelu można by znaleźć 3 skupienia natomiast w drugim widoczne jest, że najlepsze będą 2.
+
+## Wizualizacja
+
+```{r}
+klastry <- cutree(mod.hc.ward, k=2)
+fviz_cluster(list(data = dane_as, cluster = klastry))
+# optymalne będą 2 podziały
+```
+
+W tym przypadku 2 skupienia wydają się optymalne.
+
+## Heatmap
+
+```{r}
+set.seed(123)
+samp2<-sample.int(800,size = 50)
+dane_as2<-dane[c(samp2),c(2,6,7,8,9,10,11)]
+row.names(dane_as2)<-dane_as2$Name
+dane_as2<-dane_as2[,-1]
+dane_as_std2 <- dane_as2 %>% scale %>% as.data.frame()
+
+d2 <- get_dist(dane_as2, stand = F)
+fviz_dist(d2)
+```
+
+Z tej heatmapy można wywnioskować że powinny być conajmniej 2, a może nawet 3 czy 4 skupienia.
+
+## Liczba skupień
+
+```{r}
+fviz_nbclust(dane_as_std2, hcut, method = "wss", k.max = 15) # metoda hierarchiczna
+fviz_nbclust(dane_as_std2, kmeans, method = "silhouette")
+```
+
+Znowu optymalne wydają się 2 skupienia.
+
+## Modele
+
+Model zbudowany przy użyciu łączenia metodą pojedynczego wiązania:
+
+```{r}
+mod.hc.complete2 <- hclust(d2, method = "complete" )
+plot(mod.hc.complete2, cex = 0.6)
+```
+
+Model zbudowany przy użyciu łączenia metodą Warda:
+
+```{r}
+mod.hc.ward2 <- hclust(d2, method = "ward.D2" )
+plot(mod.hc.ward2, cex = 0.6)
+```
+
+Pierwszy model sugeruje użycia większej liczby skupień np 3 lub 4, natomiast 2 znalazł 2 lub 3.
+
+## Wizualizacja
+
+```{r}
+klastry2 <- cutree(mod.hc.ward2, k=2)
+fviz_cluster(list(data = dane_as2, cluster = klastry2))
+
+klastry2_1 <- cutree(mod.hc.ward2, k=3)
+fviz_cluster(list(data = dane_as2, cluster = klastry2_1))
+```
+
+W tym przypadku i 2 i 3 skupienia mają sens ze względu na elementy odstające.
+
+## Heatmap
+
+```{r}
+set.seed(997)
+samp3<-sample.int(800,size = 50)
+dane_as3<-dane[c(samp3),c(2,6,7,8,9,10,11)]
+row.names(dane_as3)<-dane_as3$Name
+dane_as3<-dane_as3[,-1]
+dane_as_std3 <- dane_as3 %>% scale %>% as.data.frame()
+
+d3 <- get_dist(dane_as3, stand = F)
+fviz_dist(d3)
+```
+
+Na tej heatmapie widoczne jest conajmniej 5 skupień.
+
+## Liczba skupień
+
+```{r}
+fviz_nbclust(dane_as_std3, hcut, method = "wss", k.max = 15) # metoda hierarchiczna
+fviz_nbclust(dane_as_std3, kmeans, method = "silhouette")
+```
+
+Optymalna wydaje się liczba skupień od 2 do 5.
+
+## Modele
+
+Model zbudowany przy użyciu łączenia metodą pojedynczego wiązania:
+
+```{r}
+mod.hc.complete3 <- hclust(d3, method = "complete" )
+plot(mod.hc.complete3, cex = 0.6)
+```
+
+Model zbudowany przy użyciu łączenia metodą Warda.
+
+```{r}
+mod.hc.ward3 <- hclust(d3, method = "ward.D2" )
+plot(mod.hc.ward3, cex = 0.6)
+```
+
+Pierwszy model sugeruje 2,3 lub 5 skupień natomiast dla drugiego optymalne wydają się 2.
+
+## Wizualizacja
+
+```{r}
+klastry3 <- cutree(mod.hc.ward3, k=2)
+fviz_cluster(list(data = dane_as3, cluster = klastry3))
+
+klastry4 <- cutree(mod.hc.ward3, k=3)
+fviz_cluster(list(data = dane_as3, cluster = klastry4))
+
+klastry5 <- cutree(mod.hc.ward3, k=4)
+fviz_cluster(list(data = dane_as3, cluster = klastry5))
+
+klastry6 <- cutree(mod.hc.ward3, k=5)
+fviz_cluster(list(data = dane_as3, cluster = klastry6))
+```
+
+Jak widać pasuje tutaj wiele możliwości i ciężko podjąć decyzję który podział będzie najlepszy.
