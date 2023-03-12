@@ -7,3 +7,5 @@
 ## Mniejszy projekt z zakresu budowy i analizy szeregów czasowych polegający na predykcji akcji firmy Apple.
 
 [Projekt-Sc](https://alflermilosz.github.io/Moje-Projekty/Projekt-Szeregi-Czasowe/Projekt.html)
+
+[Projekt-Py](https://alflermilosz.github.io/Moje-Projekty/Projekt-Python/Projekt-1.html)
