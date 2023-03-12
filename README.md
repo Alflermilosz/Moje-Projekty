@@ -11,3 +11,7 @@
 ## Mniejszy projekt wykonany w programie Jupyther Notebook z zakresu wizualizacji i analizy danych giełdowych różnych walut.
 
 [Projekt-Py](https://alflermilosz.github.io/Moje-Projekty/Projekt-Python/Projekt-1.html)
+
+## Mniejszy projekt wykonany w programie RStudio z zakresu web scrapingu i wizualizacji danych.
+
+[Projekt-Py](https://alflermilosz.github.io/Moje-Projekty/Projekt-WD/Projekt2.html)
