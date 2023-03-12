@@ -14,4 +14,4 @@
 
 ## Mniejszy projekt wykonany w programie RStudio z zakresu web scrapingu i wizualizacji danych.
 
-[Projekt-Py](https://alflermilosz.github.io/Moje-Projekty/Projekt-WD/Projekt2.html)
+[Projekt-WD](https://alflermilosz.github.io/Moje-Projekty/Projekt-WD/Projekt2.html)
