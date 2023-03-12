@@ -1,0 +1,303 @@
+---
+title: "Projekt"
+author: "Miłosz Alfler"
+date: "`r Sys.Date()`"
+output: 
+  html_document
+---
+
+```{r setup, include=FALSE,message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(rvest)
+library(tidyverse)
+library(flextable)
+library(ggplot2)
+library(gtsummary)
+library(knitr)
+library(kableExtra)
+library(ggpubr)
+```
+
+# Analiza ocen serialu "Przyjaciele"
+
+Celem projektu jest przedstawienie ocen sezonów, odcinków i aktorów wystawionych przez uzytkowników portalu filmweb.
+
+## Sezony
+
+Na wstępie widzimy zestawienie wszystkich sezonów serialu wraz z ich ocenami, latami emisji i liczbą głosów. W tabeli zaznaczony jest sezon 5, który ma najwyższą ocenę.
+
+```{r echo=FALSE}
+urlSezony <- "https://www.filmweb.pl/serial/Przyjaciele-1994-33993/seasons/ranking"
+pageSezony <- read_html(urlSezony)
+
+Nazwa_sezonu <- pageSezony %>% 
+  html_nodes(".seasonPreview__title") %>% 
+  html_text()
+
+Ocena_sezonu <- pageSezony %>% 
+  html_nodes(".seasonPreview__rate span") %>% 
+  html_text()
+Ocena_sezonu2<-as.numeric(gsub(",",".",Ocena_sezonu))
+
+Lata_sezonu <- pageSezony %>% 
+  html_nodes(".seasonPreview__date") %>% 
+  html_text()
+
+Liczba_glosow_sezonu <- pageSezony %>% 
+  html_nodes(".seasonPreview__ratingCount") %>% 
+  html_text()
+
+df <- data.frame(Nazwa_sezonu,Ocena_sezonu,Lata_sezonu,Liczba_glosow_sezonu) %>% 
+  arrange(Lata_sezonu)
+
+ft <- flextable(df) %>% 
+  set_header_labels(Nazwa_sezonu="Sezon",
+                    Ocena_sezonu="Ocena",
+                    Lata_sezonu="Lata emisji",
+                    Liczba_glosow_sezonu="Liczba głosów") %>% 
+  theme_vader() %>% 
+  set_caption( caption = "Ranking sezonów serialu Przyjaciele") %>% 
+  width(width = 1) %>% 
+  bg(i=5,bg="blue",part = "body")
+
+ft
+```
+
+Niżej widzimy to zestawienie w postaci wykresu kolumnowego.
+
+```{r echo=FALSE}
+
+Przy<-df %>% 
+  ggplot(aes(x=Lata_sezonu,y=Ocena_sezonu))+
+  geom_col(fill="#C63EF0B4",color="black")+
+  scale_x_discrete(labels = c("Sezon 1","Sezon 2","Sezon 3","Sezon 4","Sezon 5",
+                              "Sezon 6","Sezon 7","Sezon 8","Sezon 9","Sezon 10"))+
+  xlab(label = "Sezony")+
+  ylab(label = "Średnia ocena")
+
+
+Przy
+
+
+
+```
+
+## TOP 50 odcinków
+
+Następnym zestawieniem jest ranking 50 najlepszych odcinków serialu. W tabeli widzimy Nazwe odcinka, ocenę, datę emisji, liczbe głosów jak i numer odcinka i sezonu. Zaznaczone zostały odcinki z sezonu 5, który cechuje się najwyższą oceną.
+
+```{r echo=FALSE}
+urlOdcinki <- "https://www.filmweb.pl/serial/Przyjaciele-1994-33993/episode/ranking"
+pageOdcinki <- read_html(urlOdcinki)
+
+NR_odc <- pageOdcinki %>% 
+  html_nodes(".episodePreview__subTitle") %>% 
+  html_text()
+
+Nazwa_odc <- pageOdcinki %>% 
+  html_nodes(".episodePreview__subTitle+ .episodePreview__title") %>% 
+  html_text()
+
+Ocena_odc <- pageOdcinki %>% 
+  html_nodes(".episodePreview__rate span") %>% 
+  .[-c(3,4,6,7)] %>% 
+  html_text()
+Ocena_odc2<-as.numeric(gsub(",",".",Ocena_odc))
+
+Liczba_glosow_odc <- pageOdcinki %>% 
+  html_nodes(".episodePreview__ratingCount") %>% 
+  .[-c(3,4,6,7)] %>% 
+  html_text()
+
+Data_emisji_odc <- pageOdcinki %>% 
+  html_nodes(".episodePreview__date") %>% 
+  .[-c(3,4,6,7)] %>% 
+  html_text()
+
+sezony<-c(5,10,10,6,7,5,4,8,10,2,4,8,8,5,3,8,5,8,9,6,6,5,2,
+          4,8,10,6,7,5,10,10,7,8,4,7,5,9,4,3,3,6,10,2,2,10,5)
+a<-table(sezony)
+a<-data.frame(table(sezony))
+
+odcinki<-c(14,19,18,25,24,24,24,24,17,14,12,9,2,8,6,
+            23,2,4,24,9,22,11,7,8,12,13,24,6,5,4,
+            12,23,3,1,16,23,7,20,25,21,23,3,22,15,14,
+            9)
+
+df2 <- data.frame(Nazwa_odc,Ocena_odc,Data_emisji_odc,Liczba_glosow_odc,sezony,odcinki) %>% 
+  arrange(desc(Ocena_odc),desc(Liczba_glosow_odc))
+
+ft2 <- flextable(df2) %>% 
+  set_header_labels(Nazwa_odc="Nazwa odcinka",
+                    odcinki="Numer odcinka",
+                    Ocena_odc="Ocena odcinka",
+                    Data_emisji_odc="Data emisji",
+                    Liczba_glosow_odc="Liczba głosów",
+                    sezony="Numer sezonu") %>% 
+  theme_vader() %>% 
+  width(width = 2) %>% 
+  height(height = 2) %>% 
+  set_caption(caption = "TOP 50 odcinków") %>% 
+  bg(i=~sezony==5,bg="#001799AA",part = "body")
+
+ft2
+
+
+```
+
+Poniżej ta sama tabela przedstawiona w formie wykresu kolumnowego. Widzimy jak często dany sezon występował w top 50.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+a %>% 
+  ggplot(aes(sezony,Freq,group=1))+
+  geom_col(color="black",fill=c("#2841FAC7"))+
+  geom_smooth(se=F,color="red")+
+  ylab(label = "Ilość odcinków w TOP 50")+
+  xlab(label = "Numer sezonu")
+
+```
+
+## Postacie
+
+Następnym elementem jest tabela przestawiająca akorów serialu wraz z ich ocenami jak i portretami.
+
+```{r echo=FALSE}
+urlPostacie <- "https://www.filmweb.pl/serial/Przyjaciele-1994-33993"
+pagePostacie <- read_html(urlPostacie)
+
+Nazwa_aktora <- pagePostacie %>% 
+  html_nodes(".crs--persons .personRole__person span") %>% 
+  .[-7] %>% 
+  html_text()
+
+Nazwa_postaci <- pagePostacie %>% 
+  html_nodes(".crs--persons .link span") %>% 
+  html_text()
+
+Ocena_ogl <- pagePostacie %>% 
+  html_nodes(".personRole__ratingRate") %>% 
+  .[-7] %>% 
+  html_text()
+
+Liczba_glosow_postacie <- pagePostacie %>% 
+  html_nodes(".personRole__ratingCount") %>% 
+  .[-7] %>% 
+  html_text()
+
+
+
+img<-c("")
+df3 <- data.frame(Nazwa_aktora,Nazwa_postaci,Ocena_ogl,Liczba_glosow_postacie,img)
+colnames(df3)<-c("Imie aktora","Imie postaci","Ocena","Liczba głosów","Zdjęcie")
+
+df3 %>% 
+  kbl(booktabs = T) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>% 
+  kable_paper(full_width = T) %>% 
+  column_spec(5, image = spec_image(c("C:\\Users\\milos\\OneDrive\\Dokumenty\\mathewperry.jpg",
+                                    "C:\\Users\\milos\\OneDrive\\Dokumenty\\mattleblanc.jpg",
+                                    "C:\\Users\\milos\\OneDrive\\Dokumenty\\lisakurdow.jpg",
+                                    "C:\\Users\\milos\\OneDrive\\Dokumenty\\jeniferaniston.jpg",
+                                    "C:\\Users\\milos\\OneDrive\\Dokumenty\\davidschwimmer.jpg",
+                                    "C:\\Users\\milos\\OneDrive\\Dokumenty\\courtneycox.jpg"),300,300))
+```
+
+## Zestawienie z innymi serialami
+
+Ostatnim już elementem jest zestawienie ocen poszczególnych sezonów z innymi serialami. Do porównania posłużyły seriale: "Bojack Horseman", "Gra o tron" i "Breaking Bad".
+
+```{r echo=FALSE}
+
+urlBojack<-"https://www.filmweb.pl/serial/BoJack+Horseman-2014-718443/seasons/ranking"
+pageBojack<-read_html(urlBojack)
+
+BojackSezonyNazwa <- pageBojack %>% 
+  html_nodes(".seasonPreview__title") %>% 
+  html_text()
+
+BojackSezonyOceny<-pageBojack %>% 
+  html_nodes(".seasonPreview__rate span") %>% 
+  html_text()
+BojackSezonyOcenyL<-as.numeric(gsub(",",".",BojackSezonyOceny))
+
+dfB<-data.frame(BojackSezonyNazwa,BojackSezonyOceny)
+
+Boj<-dfB %>% 
+  ggplot(aes(BojackSezonyNazwa,BojackSezonyOceny))+
+  geom_col(fill="red",color="black")+
+  xlab(label = "Sezony")+
+  ylab(label = "Średnia ocena")
+
+urlGOT<-"https://www.filmweb.pl/serial/Gra+o+tron-2011-476848/seasons/ranking"
+pageGOT<-read_html(urlGOT)
+GOTSezonyNazwa<-pageGOT %>% 
+  html_nodes(".seasonPreview__title") %>% 
+  html_text()
+
+GOTSezonyOcena<-pageGOT %>% 
+  html_nodes(".seasonPreview__rate span") %>% 
+  html_text()
+
+GOTSezonyOcenaL<-as.numeric(gsub(",",".",GOTSezonyOcena))
+
+urlBB<-"https://www.filmweb.pl/serial/Breaking+Bad-2008-430668/seasons/ranking"
+pageBB<-read_html(urlBB)
+BBSezonyNazwa<-pageBB %>% 
+  html_nodes(".seasonPreview__title") %>% 
+  html_text()
+
+BBSezonyOcena<-pageBB %>% 
+  html_nodes(".seasonPreview__rate span") %>% 
+  html_text()
+
+BBSezonyOcenaL<-as.numeric(gsub(",",".",BBSezonyOcena))
+
+
+zestawienie<-data.frame(Nazwa_serialu=c("Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele","Przyjaciele",
+                                        "Bojack horseman","Bojack horseman","Bojack horseman","Bojack horseman","Bojack horseman","Bojack horseman",
+                                        "Gra o tron","Gra o tron","Gra o tron","Gra o tron","Gra o tron","Gra o tron","Gra o tron","Gra o tron",
+                                        "Breaking Bad","Breaking Bad","Breaking Bad","Breaking Bad","Breaking Bad"),
+                        Sezon=c(Nazwa_sezonu[-5],BojackSezonyNazwa,GOTSezonyNazwa,BBSezonyNazwa),
+                        Ocena=c(Ocena_sezonu2[-5],BojackSezonyOcenyL,GOTSezonyOcenaL,BBSezonyOcenaL))
+
+zestawienie %>% 
+  ggplot(aes(Sezon,Ocena,color=Nazwa_serialu,group=Nazwa_serialu))+
+  geom_point()+
+  geom_line()+
+  labs(color="Nazwa serialu")+
+  theme(legend.position = "top")
+
+zestawienie %>% 
+  ggplot(aes(Sezon,Ocena,color=Nazwa_serialu,group=Nazwa_serialu))+
+  geom_point()+
+  geom_line()+
+  labs(color="Nazwa serialu")+
+  facet_wrap(~Nazwa_serialu)+
+    scale_x_discrete(labels = c("1","2","3","4","5",
+                              "6","7","8","9","10"))+
+  theme(legend.position = "non")
+
+
+
+
+```
+
+## Źródła
+
+[Ranking sezonów](https://www.filmweb.pl/serial/Przyjaciele-1994-33993/seasons/ranking)
+
+[TOP 50 odcinków](https://www.filmweb.pl/serial/Przyjaciele-1994-33993/episode/ranking)
+
+[Ranking postaci i aktorów](https://www.filmweb.pl/serial/Przyjaciele-1994-33993)
+
+[Bojack Horseman](https://www.filmweb.pl/serial/BoJack+Horseman-2014-718443/seasons/ranking)
+
+[Gra o tron](https://www.filmweb.pl/serial/Gra+o+tron-2011-476848/seasons/ranking)
+
+[Breaking bad](https://www.filmweb.pl/serial/Breaking+Bad-2008-430668/seasons/ranking)
+
+
