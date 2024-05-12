@@ -14,4 +14,4 @@
 
 ## Mniejsza analiza danych wykonana w programie RStudio dotycząca danynych o cukrzycy.
 
-[Projekt-diabetes](https://github.com/Alflermilosz/Moje-Projekty/blob/main/Projekt%20o%20cukrzycy/Projekt_eksploracja_diabets.html)
+[Projekt-diabetes](https://alflermilosz.github.io/Moje-Projekty/Projekt%20o%20cukrzycy/Projekt_eksploracja_diabets.html)
