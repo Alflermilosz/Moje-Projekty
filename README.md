@@ -15,3 +15,7 @@
 ## Mniejsza analiza danych wykonana w programie RStudio dotycząca danynych o cukrzycy.
 
 [Projekt-diabetes](https://alflermilosz.github.io/Moje-Projekty/Projekt%20o%20cukrzycy/Projekt_eksploracja_diabets.html)
+
+## Projekt wykonany w dwuosobowym zespole, którego celem było stworzenie jak najlepszej sieci neuronowej w zdaniu klasyfikacyjnym.
+
+[Projekt-CV](https://alflermilosz.github.io/Moje-Projekty/Projekt%20CV/ProjektCV.html)
