@@ -1,0 +1,754 @@
+---
+title: "Projekt eksploracja"
+author: "Szymon Dufek"
+date: "2023-06-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+# Wstęp
+
+Celem projektu jest jak najdokładniejsza klasyfikacja osób chorujących na cukrzycę. Dane zawierają klasyczne parametry dzięki którym lekarz jest w stanie ocenić, czy pacjent jest chory. W śród nich znajdują się osóby które nie chorują na cukrzycę. Dane pochodzą ze strony kaggle ze zbioru [(link)](https://www.kaggle.com/datasets/iammustafatz/diabetes-prediction-dataset "Diabetes prediction dataset").
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+dane <- read.csv("diabetes_prediction_dataset.csv")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse)
+library(kableExtra)
+library(tidymodels)
+library(rpart.plot)
+library(recipes)
+library(themis)
+library(modeldata)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+dane$gender <- as.factor(dane$gender)
+dane$hypertension <- as.factor(dane$hypertension)
+dane$heart_disease <- as.factor(dane$heart_disease)
+dane$diabetes <- as.factor(dane$diabetes)
+dane$smoking_history <- as.factor(dane$smoking_history)
+
+miara <- c("Płeć","Wiek","Nadciśnienie","Choroba serca","Czy pali","BMI","Wskaźnik HbA1c","Poziom glukozy","Cukrzyca")
+opic <- c("Płeć pacjenta - występują 3 poziomy: Mężczyzna, Kobieta, Inny.","Wiek pacjenta","Informacja, czy pacjent ma problemy z nadciśnieniem, gdzie 1 oznacza chorego pacjenta a 0 zdrowego.","Informacja, czy pacjent ma inne choroby związane z pracą serca.","Informacja, czy pacjent w przeszłości palił wyroby tytoniowe.","Body Mass Index - współczynnik powstały przez podzielenie masy ciała podanej w kilogramach przez kwadrat wysokości podanej w metrach.","Hemoglobina glikowana, miara pozwalająca ocenić średni poziom cukru we krwi z ostanich 2-3 miesięcy u pacjenta.","Poziom glukozy we krwi w czasie wykonywania badnia.","Czy pacjent choruje na cukrzycę, gdzie 1 oznacza chorego pacjenta a 0 zdrowego.")
+
+tabelka <- as.data.frame(miara) %>% 
+  bind_cols(opic)
+
+colnames(tabelka) <- c("Miara", "Opis")
+
+tabelka %>% 
+  kable() %>% 
+  kable_styling()
+
+
+
+```
+
+# Wykresy i tabelki
+
+```{r include=FALSE}
+sum(is.na(dane))#nie ma braków
+```
+
+# Podstawowe statystki zmiennych liczbowych
+
+```{r}
+st<-dane %>% 
+  select("age","bmi","HbA1c_level","blood_glucose_level") 
+st_op<-apply(st,2,summary)
+st_op<-rbind(st_op,Sd=apply(st,2,sd))
+as.data.frame(round(st_op,2)) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+# Płeć
+
+## Liczebność 
+
+```{r}
+  dane %>% 
+    group_by(gender) %>% 
+    count() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres kołowy liczby badanych ze względu na płeć
+
+```{r}
+  dane %>% 
+    group_by(gender) %>% 
+    count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="",y=perc,fill=gender))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE)
+```
+
+# Wiek
+
+## Wykres histogram z rozkładem gęstości prawdopodobieństwa zmiennej wiek
+
+```{r}
+dane %>% 
+  ggplot(aes(age))+
+  geom_histogram(aes(y=..density..),fill="#429bf5",colour="#7e128c")+
+  geom_density(lwd=1.5,col="#d92555")+
+  xlab("wiek")+
+  ylab("rozkład gęstości")
+
+```
+
+
+# Nadciśnienie
+
+## Liczebność
+
+```{r}
+  dane %>% 
+    group_by(hypertension) %>% 
+    count() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres kołowy liczby badanych ze względu na to czy pacjent ma problemy z nadciśnieniem
+
+```{r}
+  dane %>% 
+    group_by(hypertension) %>% 
+    count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="",y=perc,fill=hypertension))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE)
+```
+
+# Choroby serca
+
+## Liczebność
+
+```{r}
+  dane %>% 
+    group_by(heart_disease) %>% 
+    count() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres kołowy liczby badanych ze względu na to czy zmagali się z chorobami serca
+
+```{r}
+  dane %>% 
+    group_by(heart_disease) %>% 
+    count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="",y=perc,fill=heart_disease))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE)
+```
+
+# Historia palenia
+
+## Liczebność
+
+```{r}
+  dane %>% 
+    group_by(smoking_history) %>% 
+    count() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres kołowy liczby badanych ze względu na to czy palili
+
+```{r}
+  dane %>% 
+    group_by(smoking_history) %>% 
+    count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="",y=perc,fill=smoking_history))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE)
+```
+
+# BMI
+
+## Wykres histogram z rozkładem gęstości prawdopodobieństwa zmiennej BMI
+
+```{r}
+dane %>% 
+  ggplot(aes(bmi))+
+  geom_histogram(aes(y=..density..),fill="#429bf5",colour="#7e128c")+
+  geom_density(lwd=1.5,col="#d92555")+
+  xlab("BMI")+
+  ylab("rozkład gęstości")
+
+```
+
+# Wskaźnik HbA1c
+
+## Wykres histogram z rozkładem gęstości prawdopodobieństwa wskaźnika HbA1c
+
+```{r}
+dane %>% 
+  ggplot(aes(HbA1c_level))+
+  geom_histogram(aes(y=..density..),fill="#429bf5",colour="#7e128c")+
+  geom_density(lwd=1.5,col="#d92555")+
+  xlab("HbA1c_level")+
+  ylab("rozkład gęstości")
+
+```
+
+# Poziom glukozy we krwi
+
+## Wykres histogram z rozkładem gęstości prawdopodobieństwa poziomów glukozy we krwi
+
+```{r}
+dane %>% 
+  ggplot(aes(blood_glucose_level))+
+  geom_histogram(aes(y=..density..),fill="#429bf5",colour="#7e128c")+
+  geom_density(lwd=1.5,col="#d92555")+
+  xlab("Poziom glukozy we krwi")+
+  ylab("rozkład gęstości")
+
+```
+
+# Cukrzyca
+
+## Liczebność
+
+```{r}
+  dane %>% 
+    group_by(diabetes) %>% 
+    count() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+## Wykres kołowy liczby badanych ze względu na to czy mają cukrzyce
+
+```{r}
+  dane %>% 
+    group_by(diabetes) %>% 
+    count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n` / sum(`n`)) %>% 
+  arrange(perc) %>%
+  mutate(labels = scales::percent(perc)) %>% 
+  ggplot(aes(x="",y=perc,fill=diabetes))+
+  geom_bar(stat="identity",width = 1)+
+  coord_polar("y",start=0)+
+  geom_label(aes(label = labels),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE)
+```
+
+
+```{r include=FALSE}
+load("final.RData") # Wczytanie gotowych modeli
+```
+
+
+# Podział zbioru
+
+Zbiór podzieliliśmy na uczący i testowy w proporcji 4/1 z opcją 'strata=diabetes' aby zachować proporcje z populacji. Dodatkowo użyliśmy metody upsamplingu aby wyrównać proporcje w grupach ze względu na zmienną diabetes.
+
+```{r eval=FALSE, include=TRUE}
+rec<-recipe(diabetes~.,dane)%>%
+step_upsample(diabetes,over_ratio=0.5)
+
+set.seed(2115)
+split<-initial_split(dane,0.8,strata = diabetes)
+train<-training(split)
+test<-testing(split)
+```
+
+# Walidacja metodą MonteCarlo
+
+Zbiór do walidacji krzyżowej przygotowaliśmy metodą Monte-Carlo z 5 krotnymi powtórzeniami w proporcji 4/1. Dodatkowo za metryki posłóżą nam 'accuracy' i 'roc auc'.
+
+```{r eval=FALSE, include=TRUE}
+mc<-mc_cv(train,prop = 0.8,times = 5)
+ctrl<-control_grid(verbose = F,save_pred = T)
+acc<-metric_set(accuracy,roc_auc)
+```
+
+# Drzewo decyzyjne
+
+Model drzewa przygotowaliśmy tuningując parametry 'cost_complexity', 'tree_depth' i 'min_n', a jako silnik użyliśmy silnik 'rpart'.
+
+```{r eval=FALSE, include=TRUE}
+# Budowa modelu do tuningu
+dt<-decision_tree(cost_complexity = tune(),
+                  tree_depth = tune(),
+                  min_n = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+
+params.dt<-extract_parameter_set_dials(dt)
+
+grid.dt<-grid_latin_hypercube(x=params.dt,size = 15)
+```
+
+## Siatka dla tuningu 
+
+Do utworzenia siatki użyliśmy Łacińskiego hipersześcianu z 15 kombinacjami.
+
+```{r}
+
+grid.dt %>% kable() %>% 
+  kable_styling()
+```
+
+```{r eval=FALSE, include=TRUE}
+## Tuning drzewa
+doParallel::registerDoParallel()
+tun.dt<-dt %>% 
+  tune_grid(rec,
+            resamples=mc,
+            metrics=acc,
+            control=ctrl,
+            grid=grid.dt)
+```
+
+## Predykcje na zbiorze uczącym
+
+```{r}
+head(collect_predictions(tun.dt)) %>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres oraz tabela najlepszych parametrów dla drzewa
+
+```{r}
+autoplot(tun.dt)
+
+show_best(tun.dt)%>% kable() %>% 
+  kable_styling()
+best.dt.params<-select_best(tun.dt)
+```
+
+```{r eval=FALSE, include=TRUE}
+## Dopasowanie tuningowanych parametrów
+
+dt<-dt %>% 
+  finalize_model(best.dt.params)
+
+final.dt<-last_fit(dt,rec,split)
+
+
+```
+
+## Wyniki dla drzewa
+
+## Metryki na zbiorze testowym
+
+```{r}
+collect_metrics(final.dt)%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres krzywej ROC
+
+```{r}
+final.dt %>%
+  collect_predictions() %>% 
+  roc_curve(diabetes, .pred_0) %>% 
+  autoplot()
+```
+
+## Ostateczne Drzewo
+
+```{r}
+final.dt %>% 
+  extract_fit_engine() %>% 
+  rpart.plot(roundint=F)
+
+```
+
+# Boosting
+
+Model boosting przygotowaliśmy tuningując parametry 'trees', 'min_n', 'tree_depth' oraz używając silnika "xgboost"
+
+```{r eval=FALSE, include=TRUE}
+# Budowa Boostingu do tuningu
+set.seed(2115)
+rec<-recipe(diabetes~.,dane)%>%
+step_upsample(diabetes,over_ratio=0.5) %>% 
+step_dummy(all_factor_predictors())
+```
+
+```{r eval=FALSE, include=TRUE}
+boost <- boost_tree(trees = tune(),
+                    min_n = tune(),
+                    tree_depth = tune()) %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification")
+```
+
+```{r eval=FALSE, include=TRUE}
+# tu daje dla pewności zeby bylo to samo co ja robilem w innym pliku
+acc<-metric_set(accuracy,roc_auc)
+ctrl <- control_grid(verbose = FALSE,save_pred = TRUE)
+```
+
+```{r eval=FALSE, include=TRUE}
+doParallel::registerDoParallel()
+recip_res <- boost %>% tune_grid(rec,
+                       resamples = mc,
+                       metrics = acc,
+                       control = ctrl
+                       )
+```
+
+## Predykcje na zbiorze uczącym
+
+```{r}
+head(collect_predictions(recip_res))%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres i tabela najlepszych parametrów do tuningowania
+
+```{r}
+autoplot(recip_res)
+
+show_best(recip_res,metric = "accuracy")%>% kable() %>% 
+  kable_styling()
+```
+
+```{r}
+final_boost <- select_best(recip_res,metric = "accuracy")
+
+boost <- boost %>% 
+  finalize_model(final_boost)
+
+
+final_boost <- last_fit(boost,rec,split)
+```
+
+
+## Metryki dla ostatecznego boostingu
+
+```{r}
+collect_metrics(final_boost)%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres pola pod krzywą
+
+```{r}
+final_boost %>% 
+  collect_predictions() %>% 
+  roc_curve(diabetes, .pred_0) %>% 
+  autoplot()
+```
+
+# Bagging 
+
+W modelu baggingu tunowaliśmy parametry 'cost_complexity', 'tree_depth' i ' min_n', a silnikiem był silnik "rpart"
+
+```{r eval=FALSE, include=TRUE}
+library(baguette)
+bag <- bag_tree(cost_complexity = tune(),
+                tree_depth = tune(),
+                min_n = tune(),) %>% 
+  set_engine("rpart") %>% 
+  set_mode("classification")
+```
+
+```{r eval=FALSE, include=TRUE}
+# Tuning baggingu
+doParallel::registerDoParallel()
+recip_res_bag <- bag %>% tune_grid(rec,
+                       resamples = mc,
+                       metrics = acc,
+                       control = ctrl
+                       )
+```
+
+## Predykcje na zbiorze uczącym
+
+```{r}
+head(collect_predictions(recip_res_bag))%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres i tabela najlepszych parametrów do tuningowania
+
+```{r}
+
+autoplot(recip_res_bag)
+
+show_best(recip_res_bag,metric = "accuracy")%>% kable() %>% 
+  kable_styling()
+
+```
+
+```{r}
+final_bag <- select_best(recip_res_bag,metric = "accuracy")
+
+bag <- bag %>% 
+  finalize_model(final_bag)
+
+
+final_bag <- last_fit(bag,rec,split)
+
+
+```
+
+## Metryki dla ostatecznego baggingu
+
+```{r}
+collect_metrics(final_bag)%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres krzywej ROC
+
+```{r}
+final_bag %>% 
+  collect_predictions() %>% 
+  roc_curve(diabetes, .pred_0) %>% 
+  autoplot()
+```
+
+# Regresja logistyczna
+
+W modelu regresji logistycznej tuningowaliśmy parametry 'penalty' i 'mixture' z silnikiem "glmnet".
+
+```{r eval=FALSE, include=TRUE}
+## Budowa modelu do tuningu 
+reclr<-recipe(diabetes~.,dane)%>%
+step_upsample(diabetes,over_ratio=0.5) %>% 
+  step_dummy(all_factor_predictors())
+
+logreg<-logistic_reg(penalty=tune(),
+                     mixture=tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet")
+
+params.logreg<-extract_parameter_set_dials(logreg)
+
+grid.logreg<-grid_latin_hypercube(x=params.logreg,size = 15)
+```
+
+Do budowy siatki znów użyliśmy Łacińskiego hipersześcianu z 15 kombinacjami
+
+```{r}
+grid.logreg%>% kable() %>% 
+  kable_styling()
+```
+
+```{r eval=FALSE, include=TRUE}
+## Tuning logreg
+doParallel::registerDoParallel()
+tun.lr<-logreg %>% 
+  tune_grid(reclr,
+            resamples=mc,
+            metrics=acc,
+            control=ctrl,
+            grid=grid.logreg)
+```
+
+## Predykcje na zbiorze uczącym
+
+```{r}
+head(collect_predictions(tun.lr))%>% kable() %>% 
+  kable_styling()
+```
+
+## Najlepsze parametry do tuningowania
+
+```{r}
+autoplot(tun.lr)
+show_best(tun.lr,metric = NULL)%>% kable() %>% 
+  kable_styling()
+best.lr.params.acc<-select_best(tun.lr)
+```
+
+
+```{r eval=FALSE, include=TRUE}
+## Dopasowanie tuningowanych parametrów
+lracc<-logreg %>% 
+  finalize_model(best.lr.params.acc)
+
+final.lr.acc<-last_fit(lracc,reclr,split)
+```
+
+## Metryki dla ostatecznej regresji logistycznej
+
+```{r}
+
+collect_metrics(final.lr.acc)%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres krzywej ROC
+
+```{r}
+final.lr.acc %>%
+  collect_predictions() %>% 
+  roc_curve(diabetes, .pred_0) %>% 
+  autoplot()
+```
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Uwaga
+
+#Jako iż las losowy i sieć neuronową robiliśmy na platformie kaggle.com w raporcie umieściliśmy tylko gotowe wyniki dla tuningowanego lasu i nauczonej sieci. Proces budowy i uczenia modeli można znaleźć tutaj [(link)](https://www.kaggle.com/code/mioszalfler/projekt-ed/notebook "Las i sieć")
+library(magick)
+Las.acc<-readRDS("Las/ex.rf.acc.rds")
+las.fit<-last_fit(Las.acc,split)
+lplot<-image_read("Las/rf.autoplot (1).jpg")
+las.params<-read.csv("Las/rf.best.params.acc.csv")
+```   
+
+# Las losowy
+
+Model lasu losowego zbudowaliśmy tuningując parametry 'mtry', 'trees' i 'min_n' z silnikiem "randomForest", a jako siatkę użyliśmy siatki maksymalizującej entropię z 15 kombinacjami.
+
+## Wykres i tabela najlepszych parametrów 
+
+```{r}
+plot(lplot)
+las.params %>% kable() %>% 
+  kable_styling()
+```
+
+## Metryki dla ostatecznego lasu
+
+```{r}
+collect_metrics(las.fit)%>% kable() %>% 
+  kable_styling()
+```
+
+## Wykres krzywej ROC
+
+```{r}
+las.fit %>%
+  collect_predictions() %>% 
+  roc_curve(diabetes, .pred_0) %>% 
+  autoplot()
+```
+
+# Etapy uczenia sieci
+
+```{r}
+library(rhdf5)
+library(keras)
+model.nn <- load_model_hdf5("modelnn.h5")
+#model.nn<-h5read("NN/modelnn.h5",name = "/")
+dank<-read.csv("diabetes_prediction_dataset.csv")
+dane_nn<-dank
+dane_nn$gender<-as.factor(dane_nn$gender)
+dane_nn$smoking_history<-as.factor(dane_nn$smoking_history)
+rec_nn<-recipe(diabetes~.,dane_nn)%>%
+step_dummy(all_factor())
+dane2<-prep(rec_nn)%>%juice()
+set.seed(2115)
+split2<-initial_split(dane2,0.8,strata = diabetes)
+train2<-training(split2)
+test2<-testing(split2)
+x_test<-test2%>%select(-diabetes)%>%scale()
+y_test<- keras::to_categorical(test2$diabetes)
+xxx<- model.nn%>%evaluate(x_test,y_test)
+xxx <- as.data.frame(xxx)
+xxx<-cbind(xxx,row.names(xxx))
+
+#xxx<-set_rownames(NULL)
+row.names(xxx)<-NULL
+colnames(xxx) <- c("metryka","nazwa")
+xxx <- xxx[-1,]
+
+img <- image_read("proces_uczenia.jpg")
+plot(img)
+
+```
+
+
+# Porównanie modeli
+
+```{r}
+las.met <- collect_metrics(final.dt)
+boost.met <- collect_metrics(final_boost)
+bag.met <- collect_metrics(final_bag)
+lr.acc.met <- collect_metrics(final.lr.acc)
+rf.met<-collect_metrics(las.fit)
+las.met<- las.met %>% 
+  select(.metric,.estimate) %>% 
+  pivot_wider(names_from = .metric,values_from = .estimate)
+boost.met <- boost.met %>% 
+  select(.metric,.estimate) %>% 
+  pivot_wider(names_from = .metric,values_from = .estimate)
+bag.met <- bag.met %>% 
+  select(.metric,.estimate) %>% 
+  pivot_wider(names_from = .metric,values_from = .estimate)
+lr.acc.met <- lr.acc.met %>% 
+  select(.metric,.estimate) %>% 
+  pivot_wider(names_from = .metric,values_from = .estimate)
+rf.met<-rf.met %>% 
+    select(.metric,.estimate) %>% 
+  pivot_wider(names_from = .metric,values_from = .estimate)
+
+xxx <- xxx %>% 
+  pivot_wider(names_from = nazwa,values_from = metryka)
+colnames(xxx) <- c("accuracy","roc_auc")
+
+tabela.metryk<- bind_rows(list(Drzewo = las.met,
+               Boosting = boost.met,
+               Bagging=bag.met,
+               Logi_reg_acc = lr.acc.met,
+               Las_losowy=rf.met,
+               Sieć_neuronowa = xxx),
+          .id = "Model")
+colnames(tabela.metryk) <- c("Model","Accuracy","ROC_AUC")
+
+library(reactable)
+
+reactable(tabela.metryk,columns = list(
+  Accuracy = colDef(format = colFormat(digits = 4)),
+  ROC_AUC = colDef(format = colFormat(digits = 4),name = "ROC AUC")
+))
+```
+
+
