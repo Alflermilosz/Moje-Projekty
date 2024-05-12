@@ -11,3 +11,7 @@
 ## Mniejszy projekt wykonany w programie RStudio z zakresu web scrapingu i wizualizacji danych.
 
 [Projekt-WD](https://alflermilosz.github.io/Moje-Projekty/Projekt-WD/Projekt2.html)
+
+## Mniejszy projekt wykonany w programie RStudio z zakresu web scrapingu i wizualizacji danych.
+
+[Projekt-diabetes]((https://github.com/Alflermilosz/Moje-Projekty/blob/main/Projekt%20o%20cukrzycy/Projekt_eksploracja_diabets.html))
